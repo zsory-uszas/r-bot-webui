@@ -1,0 +1,127 @@
+
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ügyfélszolgálati Chat</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-light: #3b82f6;
+            --dark: #1e293b;
+            --dark-light: #334155;
+            --border: #e2e8f0;
+            --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); min-height: 100vh; }
+        
+        /* Chat Button */
+        #chatButton {
+            position: fixed; bottom: 30px; right: 30px; width: 64px; height: 64px;
+            border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            color: white; border: none; box-shadow: var(--shadow-xl); cursor: pointer;
+            display: flex; align-items: center; justify-content: center; z-index: 1000;
+        }
+        #chatButton svg { width: 28px; height: 28px; }
+
+        /* Chat Modal */
+        #chatModal {
+            display: none; position: fixed; bottom: 110px; right: 30px; width: 400px; height: 600px;
+            border-radius: 20px; background: white; box-shadow: var(--shadow-xl);
+            flex-direction: column; z-index: 999; overflow: hidden;
+        }
+
+        #chatHeader {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            color: white; padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between;
+        }
+
+        #chatContent {
+            flex: 1; padding: 1.5rem; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; gap: 1rem;
+        }
+
+        /* Messages */
+        .message { max-width: 80%; padding: 0.8rem 1rem; border-radius: 12px; word-wrap: break-word; font-size: 0.95rem; }
+        .message.customer { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .message.bot { background: white; color: var(--dark); align-self: flex-start; border-bottom-left-radius: 2px; border-left: 3px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+        /* Input area */
+        #chatInputArea { padding: 1rem; background: white; border-top: 1px solid var(--border); display: flex; gap: 0.5rem; }
+        #chatInput { flex: 1; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 8px; outline: none; }
+        #sendButton { padding: 0.75rem 1.25rem; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <button id="chatButton">💬</button>
+
+    <div id="chatModal">
+        <div id="chatHeader">
+            <h3>🤖 AI Ügyfélszolgálat</h3>
+            <span style="cursor:pointer;" id="closeChat">✕</span>
+        </div>
+        <div id="chatContent">
+            <div class="message bot">Üdvözlöm! Miben segíthetek ma? Kérdezzen bátran, vagy foglaljon időpontot!</div>
+        </div>
+        <div id="chatInputArea">
+            <input type="text" id="chatInput" placeholder="Írja be üzenetét..." autocomplete="off">
+            <button id="sendButton">Küldés</button>
+        </div>
+    </div>
+
+    <script>
+        let chatHistory = [];
+
+        const chatButton = document.getElementById('chatButton');
+        const chatModal = document.getElementById('chatModal');
+        const closeChat = document.getElementById('closeChat');
+        const sendButton = document.getElementById('sendButton');
+        const chatInput = document.getElementById('chatInput');
+        const chatContent = document.getElementById('chatContent');
+
+        chatButton.addEventListener('click', () => {
+            chatModal.style.display = chatModal.style.display === 'flex' ? 'none' : 'flex';
+        });
+
+        closeChat.addEventListener('click', () => { chatModal.style.display = 'none'; });
+
+        function displayMessage(sender, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${sender}`;
+            msgDiv.textContent = text;
+            chatContent.appendChild(msgDiv);
+            chatContent.scrollTop = chatContent.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            displayMessage('customer', text);
+            chatInput.value = '';
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text, history: chatHistory })
+                });
+
+                const data = await response.json();
+                displayMessage('bot', data.reply);
+
+                chatHistory.push({ role: 'user', content: text });
+                chatHistory.push({ role: 'assistant', content: data.reply });
+
+            } catch (err) {
+                displayMessage('bot', 'Hiba történt a kapcsolódáskor! ⚠️');
+            }
+        }
+
+        sendButton.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+    </script>
+</body>
+</html>
