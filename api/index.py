@@ -15,43 +15,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# API kulcs és client inicializálása
+api_key = os.getenv("NVIDIA_API_KEY")
 client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
-    api_key=os.getenv("NVIDIA_API_KEY")
+    api_key=api_key
 )
 
 SYSTEM_PROMPT = (
-    "Egy professzionális ügyfélszolgálati asszisztens vagy. "
-    "Segíts az ügyfélnek időpontot foglalni vagy válaszolj a kérdéseire."
+    "Egy professzionális, segítőkész ügyfélszolgálati asszisztens vagy. "
+    "Segíts az ügyfélnek időpontot foglalni vagy válaszolj a kérdéseire udvariasan, magyar nyelven."
 )
-
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_available_slots",
-            "description": "Lekéri a szabad időpontokat.",
-            "parameters": {"type": "object", "properties": {}}
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "book_appointment",
-            "description": "Lefoglal egy időpontot.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "phone": {"type": "string"},
-                    "service_type": {"type": "string"},
-                    "slot": {"type": "string"}
-                },
-                "required": ["name", "phone", "service_type", "slot"]
-            }
-        }
-    }
-]
 
 class ChatRequest(BaseModel):
     message: str
@@ -59,46 +33,38 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
+    if not api_key:
+        return {"reply": "Hiba: Az NVIDIA_API_KEY hiányzik a Vercel beállításokból!"}
+
     try:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + req.history + [{"role": "user", "content": req.message}]
+        # Tisztított üzenetelőzmény összeállítása
+        formatted_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         
+        for msg in req.history:
+            if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                formatted_messages.append({
+                    "role": str(msg["role"]),
+                    "content": str(msg["content"])
+                })
+
+        # Hozzáadjuk a felhasználó friss üzenetét
+        formatted_messages.append({"role": "user", "content": req.message})
+
+        # AI hívása
         response = client.chat.completions.create(
             model="meta/llama-3.3-70b-instruct",
-            messages=messages,
-            tools=TOOLS,
-            tool_choice="auto"
+            messages=formatted_messages,
+            temperature=0.5,
+            max_tokens=1024
         )
 
-        response_msg = response.choices[0].message
-
-        if response_msg.tool_calls:
-            # Llama válaszának rögzítése szótár formátumban (kivédi a ChatCompletionMessage hibát)
-            messages.append({
-                "role": "assistant",
-                "content": response_msg.content,
-                "tool_calls": [tc.model_dump() for tc in response_msg.tool_calls]
-            })
-
-            for tool_call in response_msg.tool_calls:
-                func_name = tool_call.function.name
-                args = json.loads(tool_call.function.arguments)
-
-                if func_name == "get_available_slots":
-                    res = "Szabad időpontok: Holnap 10:00, Holnap 14:00, Péntek 11:30"
-                elif func_name == "book_appointment":
-                    res = f"Sikeres foglalás! Név: {args.get('name')}, Időpont: {args.get('slot')}"
-                else:
-                    res = "Művelet elvégezve."
-
-                messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": res})
-
-            final_res = client.chat.completions.create(
-                model="meta/llama-3.3-70b-instruct",
-                messages=messages
-            )
-            return {"reply": final_res.choices[0].message.content}
+        reply_content = response.choices[0].message.content
         
-        return {"reply": response_msg.content or "Sajnálom, nem tudtam feldolgozni a kérést."}
+        if reply_content:
+            return {"reply": reply_content}
+        else:
+            return {"reply": "Az AI válasza üres volt. Kérlek próbáld újra!"}
 
     except Exception as e:
-        return {"reply": f"Szerver hiba történt: {str(e)}"}
+        # Ha bármi hiba történik az NVIDIA hívásban, pontosan kiírja a képernyőre
+        return {"reply": f"API Hiba történt: {str(e)}"}
