@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="hu">
 <head>
@@ -8,6 +7,7 @@
     <style>
         :root {
             --primary: #2563eb;
+            --primary-dark: #1e40af;
             --primary-light: #3b82f6;
             --dark: #1e293b;
             --dark-light: #334155;
@@ -16,26 +16,31 @@
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: system-ui, -apple-system, sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); min-height: 100vh; }
-        
+
+        .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        .content-card { background: rgba(255, 255, 255, 0.95); border-radius: 16px; padding: 2rem; box-shadow: var(--shadow-xl); }
+        .content-card h1 { font-size: 2rem; color: var(--primary); margin-bottom: 1rem; }
+
         /* Chat Button */
         #chatButton {
             position: fixed; bottom: 30px; right: 30px; width: 64px; height: 64px;
             border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--primary-light));
             color: white; border: none; box-shadow: var(--shadow-xl); cursor: pointer;
-            display: flex; align-items: center; justify-content: center; z-index: 1000;
+            display: flex; align-items: center; justify-content: center; z-index: 1000; transition: all 0.3s;
         }
+        #chatButton:hover { transform: scale(1.08); }
         #chatButton svg { width: 28px; height: 28px; }
 
         /* Chat Modal */
         #chatModal {
-            display: none; position: fixed; bottom: 110px; right: 30px; width: 400px; height: 600px;
+            display: none; position: fixed; bottom: 110px; right: 30px; width: 420px; height: 620px;
             border-radius: 20px; background: white; box-shadow: var(--shadow-xl);
             flex-direction: column; z-index: 999; overflow: hidden;
         }
 
         #chatHeader {
             background: linear-gradient(135deg, var(--primary), var(--primary-light));
-            color: white; padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between;
+            color: white; padding: 1.25rem 1.5rem; display: flex; align-items: center; justify-content: space-between;
         }
 
         #chatContent {
@@ -43,27 +48,60 @@
         }
 
         /* Messages */
-        .message { max-width: 80%; padding: 0.8rem 1rem; border-radius: 12px; word-wrap: break-word; font-size: 0.95rem; }
-        .message.customer { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
-        .message.bot { background: white; color: var(--dark); align-self: flex-start; border-bottom-left-radius: 2px; border-left: 3px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .message { max-width: 80%; padding: 0.875rem 1.125rem; border-radius: 16px; word-wrap: break-word; font-size: 0.95rem; line-height: 1.4; }
+        .message.customer { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .message.bot { background: white; color: var(--dark); align-self: flex-start; border-bottom-left-radius: 4px; border-left: 3px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
-        /* Input area */
+        /* Typing Indicator */
+        .typing-indicator { display: none; align-self: flex-start; background: white; padding: 0.8rem 1rem; border-radius: 12px; }
+        .typing-dots { display: flex; gap: 4px; }
+        .typing-dots span { width: 8px; height: 8px; background: #94a3b8; border-radius: 50%; animation: typing 1.4s infinite; }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-8px); } }
+
+        /* Quick Actions */
+        .quick-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+        .quick-btn { padding: 0.4rem 0.8rem; background: white; color: var(--primary); border: 1px solid var(--primary); border-radius: 16px; font-size: 0.85rem; cursor: pointer; font-weight: 600; }
+        .quick-btn:hover { background: var(--primary); color: white; }
+
+        /* Input Area */
         #chatInputArea { padding: 1rem; background: white; border-top: 1px solid var(--border); display: flex; gap: 0.5rem; }
-        #chatInput { flex: 1; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 8px; outline: none; }
-        #sendButton { padding: 0.75rem 1.25rem; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; }
+        #chatInput { flex: 1; padding: 0.8rem 1rem; border: 1px solid var(--border); border-radius: 12px; outline: none; }
+        #sendButton { padding: 0.8rem 1.25rem; background: var(--primary); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; }
     </style>
 </head>
 <body>
 
-    <button id="chatButton">💬</button>
+    <div class="page-container">
+        <div class="content-card">
+            <h1>Üdvözöljük az Ügyfélszolgálaton!</h1>
+            <p>Kérdése van? Kattintson a jobb alsó sarokban lévő chat gombra az időpontfoglaláshoz vagy segítségkéréshez!</p>
+        </div>
+    </div>
+
+    <button id="chatButton">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+    </button>
 
     <div id="chatModal">
         <div id="chatHeader">
-            <h3>🤖 AI Ügyfélszolgálat</h3>
-            <span style="cursor:pointer;" id="closeChat">✕</span>
+            <h3>🤖 Ügyfélszolgálati Asszisztens</h3>
+            <span style="cursor:pointer; font-size: 1.2rem;" id="closeChat">✕</span>
         </div>
         <div id="chatContent">
-            <div class="message bot">Üdvözlöm! Miben segíthetek ma? Kérdezzen bátran, vagy foglaljon időpontot!</div>
+            <div class="message bot">
+                👋 Üdvözlöm! Én vagyok az AI asszisztens. Hogyan segíthetek?
+                <div class="quick-actions">
+                    <button class="quick-btn" onclick="sendQuick('Szabad időpontok')">📅 Időpontok</button>
+                    <button class="quick-btn" onclick="sendQuick('Ügyintézőt kérek')">👤 Ügyintéző</button>
+                </div>
+            </div>
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="typing-dots"><span></span><span></span><span></span></div>
+            </div>
         </div>
         <div id="chatInputArea">
             <input type="text" id="chatInput" placeholder="Írja be üzenetét..." autocomplete="off">
@@ -80,6 +118,7 @@
         const sendButton = document.getElementById('sendButton');
         const chatInput = document.getElementById('chatInput');
         const chatContent = document.getElementById('chatContent');
+        const typingIndicator = document.getElementById('typingIndicator');
 
         chatButton.addEventListener('click', () => {
             chatModal.style.display = chatModal.style.display === 'flex' ? 'none' : 'flex';
@@ -91,8 +130,13 @@
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${sender}`;
             msgDiv.textContent = text;
-            chatContent.appendChild(msgDiv);
+            chatContent.insertBefore(msgDiv, typingIndicator);
             chatContent.scrollTop = chatContent.scrollHeight;
+        }
+
+        function sendQuick(text) {
+            chatInput.value = text;
+            sendMessage();
         }
 
         async function sendMessage() {
@@ -102,6 +146,9 @@
             displayMessage('customer', text);
             chatInput.value = '';
 
+            typingIndicator.style.display = 'flex';
+            chatContent.scrollTop = chatContent.scrollHeight;
+
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
@@ -110,13 +157,19 @@
                 });
 
                 const data = await response.json();
-                displayMessage('bot', data.reply);
+                typingIndicator.style.display = 'none';
 
-                chatHistory.push({ role: 'user', content: text });
-                chatHistory.push({ role: 'assistant', content: data.reply });
+                if (data.reply) {
+                    displayMessage('bot', data.reply);
+                    chatHistory.push({ role: 'user', content: text });
+                    chatHistory.push({ role: 'assistant', content: data.reply });
+                } else {
+                    displayMessage('bot', 'Sajnálom, nem érkezett válasz az AI szervertől.');
+                }
 
             } catch (err) {
-                displayMessage('bot', 'Hiba történt a kapcsolódáskor! ⚠️');
+                typingIndicator.style.display = 'none';
+                displayMessage('bot', 'Hiba történt a kapcsolódáskor! Ellenőrizd a szervert. ⚠️');
             }
         }
 
