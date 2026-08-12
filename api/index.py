@@ -21,17 +21,8 @@ client = OpenAI(
 )
 
 SYSTEM_PROMPT = (
-    "Egy professzionális, udvarias ügyfélszolgálati asszisztens vagy.\n\n"
-    "SZIGORÚ IDŐPONTFOGLALÁSI SZABÁLYOK:\n"
-    "1. Ha a felhasználó időpontot szeretne foglalni, ELŐSZÖR hívd meg a `get_available_slots` funkciót!\n"
-    "2. A foglaláshoz KÖTELEZŐ MIND A 4 ADAT MEGLÉTE:\n"
-    "   - Név (name)\n"
-    "   - Telefonszám (phone)\n"
-    "   - Kért szolgáltatás (service_type)\n"
-    "   - Kiválasztott időpont (slot)\n"
-    "3. HA BÁRMELYIK ADAT HIÁNYZIK A NÉGYBŐL, NE HÍVD MEG a `book_appointment` funkciót! "
-    "Ehelyett kérdezd meg a hiányzó adatokat az ügyféltől (pl. 'Kérem adja meg a nevét és telefonszámát is!').\n"
-    "4. Ha az ügyfél élő embert/ügyintézőt kér, hívd meg a `transfer_to_human` funkciót!"
+    "Egy professzionális ügyfélszolgálati asszisztens vagy. "
+    "Segíts az ügyfélnek időpontot foglalni vagy válaszolj a kérdéseire."
 )
 
 TOOLS = [
@@ -47,30 +38,16 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "book_appointment",
-            "description": "Lefoglal egy időpontot az ügyfélnek.",
+            "description": "Lefoglal egy időpontot.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Az ügyfél teljes neve"},
-                    "phone": {"type": "string", "description": "Az ügyfél telefonszáma"},
-                    "service_type": {"type": "string", "description": "Kért szolgáltatás"},
-                    "slot": {"type": "string", "description": "A kiválasztott időpont"}
+                    "name": {"type": "string"},
+                    "phone": {"type": "string"},
+                    "service_type": {"type": "string"},
+                    "slot": {"type": "string"}
                 },
                 "required": ["name", "phone", "service_type", "slot"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "transfer_to_human",
-            "description": "Átkapcsolja az ügyfelet egy élő emberi ügyintézőhöz.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "reason": {"type": "string", "description": "Átirányítás oka"}
-                },
-                "required": ["reason"]
             }
         }
     }
@@ -82,36 +59,46 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + req.history + [{"role": "user", "content": req.message}]
-    
-    response = client.chat.completions.create(
-        model="meta/llama-3.3-70b-instruct",
-        messages=messages,
-        tools=TOOLS,
-        tool_choice="auto"
-    )
-
-    response_msg = response.choices[0].message
-
-    if response_msg.tool_calls:
-        messages.append(response_msg.model_dump())
-        for tool_call in response_msg.tool_calls:
-            func_name = tool_call.function.name
-            args = json.loads(tool_call.function.arguments)
-
-            if func_name == "get_available_slots":
-                res = "Szabad időpontjaink: 2026-08-12 10:30, 2026-08-13 11:00, 2026-08-13 15:00."
-            elif func_name == "book_appointment":
-                res = f"Sikeres foglalás! Név: {args['name']}, Tel: {args['phone']}, Szolgáltatás: {args['service_type']}, Időpont: {args['slot']}."
-            elif func_name == "transfer_to_human":
-                res = "Az átirányítási kérelmet rögzítettük. Egy munkatársunk hamarosan átveszi a beszélgetést!"
-
-            messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": res})
-
-        final_res = client.chat.completions.create(
+    try:
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + req.history + [{"role": "user", "content": req.message}]
+        
+        response = client.chat.completions.create(
             model="meta/llama-3.3-70b-instruct",
-            messages=messages
+            messages=messages,
+            tools=TOOLS,
+            tool_choice="auto"
         )
-        return {"reply": final_res.choices[0].message.content}
-    
-    return {"reply": response_msg.content}
+
+        response_msg = response.choices[0].message
+
+        if response_msg.tool_calls:
+            # Llama válaszának rögzítése szótár formátumban (kivédi a ChatCompletionMessage hibát)
+            messages.append({
+                "role": "assistant",
+                "content": response_msg.content,
+                "tool_calls": [tc.model_dump() for tc in response_msg.tool_calls]
+            })
+
+            for tool_call in response_msg.tool_calls:
+                func_name = tool_call.function.name
+                args = json.loads(tool_call.function.arguments)
+
+                if func_name == "get_available_slots":
+                    res = "Szabad időpontok: Holnap 10:00, Holnap 14:00, Péntek 11:30"
+                elif func_name == "book_appointment":
+                    res = f"Sikeres foglalás! Név: {args.get('name')}, Időpont: {args.get('slot')}"
+                else:
+                    res = "Művelet elvégezve."
+
+                messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": res})
+
+            final_res = client.chat.completions.create(
+                model="meta/llama-3.3-70b-instruct",
+                messages=messages
+            )
+            return {"reply": final_res.choices[0].message.content}
+        
+        return {"reply": response_msg.content or "Sajnálom, nem tudtam feldolgozni a kérést."}
+
+    except Exception as e:
+        return {"reply": f"Szerver hiba történt: {str(e)}"}
